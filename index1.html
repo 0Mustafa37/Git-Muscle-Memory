@@ -1,0 +1,817 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Git Muscle Memory</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a lab bench. Guide on the left, live repo (graph + three areas + terminal) on the right. */
+:root{
+  --bg:#eceff3; --panel:#fbfcfd; --ink:#17202b; --muted:#566273; --line:#d3d9e1; --soft:#e3e8ee;
+  --accent:#d9481f; --accent-ink:#ffffff; --ok:#1d8a5b; --warn:#b7791f; --bad:#c2372f;
+  --term-bg:#121820; --term-ink:#d6dee8; --term-dim:#7d8a9b; --term-ok:#7fd4a6; --term-err:#ff8a80; --term-cmd:#ffb38f;
+  --l0:#d9481f; --l1:#2d6cdf; --l2:#1d8a5b; --l3:#8f47c9; --l4:#b7791f; --l5:#0f8494;
+  --f-display:"Bricolage Grotesque", "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1318; --panel:#161c23; --ink:#e5eaf1; --muted:#97a3b4; --line:#29323e; --soft:#1e252e;
+  --accent:#ff6a3d; --accent-ink:#1a0d07; --ok:#4cc38a; --warn:#e0a640; --bad:#ff7a70;
+  --l0:#ff6a3d; --l1:#6c9cff; --l2:#4cc38a; --l3:#c08cf0; --l4:#e0a640; --l5:#3cc3d3;
+  color-scheme:dark;
+}}
+:root[data-theme="dark"]{
+  --bg:#0f1318; --panel:#161c23; --ink:#e5eaf1; --muted:#97a3b4; --line:#29323e; --soft:#1e252e;
+  --accent:#ff6a3d; --accent-ink:#1a0d07; --ok:#4cc38a; --warn:#e0a640; --bad:#ff7a70;
+  --l0:#ff6a3d; --l1:#6c9cff; --l2:#4cc38a; --l3:#c08cf0; --l4:#e0a640; --l5:#3cc3d3;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--f-body);font-size:15px;line-height:1.5;padding-inline:16px;padding-block:0 40px}
+h1,h2,h3{font-family:var(--f-display);margin:0;text-wrap:balance;letter-spacing:-.01em}
+code,kbd,.mono{font-family:var(--f-mono);font-size:.88em}
+button{font:inherit;color:inherit;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.wrap{max-width:1280px;margin:0 auto}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;padding-block:20px 16px}
+.brand{display:flex;align-items:center;gap:12px}
+.mark{width:40px;height:40px;flex:none}
+.brand h1{font-size:26px;font-weight:800}
+.brand p{margin:0;color:var(--muted);font-size:13px}
+.tabs{display:flex;gap:4px;background:var(--soft);padding:4px;border-radius:10px;flex-wrap:wrap}
+.tab{border:0;background:transparent;padding:7px 14px;border-radius:7px;font-weight:700;font-size:14px;color:var(--muted)}
+.tab[aria-selected="true"]{background:var(--panel);color:var(--ink);box-shadow:0 1px 2px rgb(0 0 0 / .12)}
+
+/* lab */
+.lab{display:grid;grid-template-columns:minmax(0,350px) minmax(0,1fr);gap:18px;align-items:start}
+@media (max-width:920px){.lab{grid-template-columns:minmax(0,1fr)}}
+.guide{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:18px;display:flex;flex-direction:column;gap:14px;position:sticky;top:calc(env(safe-area-inset-top,0px) + 12px)}
+@media (max-width:920px){.guide{position:static}}
+.stage{display:flex;flex-direction:column;gap:14px;min-width:0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;min-width:0}
+.panel-h{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:baseline;gap:6px 14px;padding:12px 16px 0}
+.panel-h h2{font-size:15px;font-weight:700}
+.eyebrow{font-size:11px;letter-spacing:.09em;text-transform:uppercase;color:var(--muted);font-weight:700}
+.legend{font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:-1px;margin-right:4px}
+
+/* lesson list */
+.lessons{display:flex;flex-wrap:wrap;gap:6px}
+.lchip{border:1px solid var(--line);background:transparent;border-radius:999px;padding:3px 10px;font-size:12.5px;font-weight:700;color:var(--muted);font-variant-numeric:tabular-nums}
+.lchip.done{border-color:var(--ok);color:var(--ok)}
+.lchip[aria-current="true"]{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+.lesson-title{font-size:22px;font-weight:800;line-height:1.15}
+.idea{margin:0;color:var(--ink)}
+.idea b{color:var(--accent)}
+.tasks{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.task{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;padding:8px 10px;border-radius:9px;font-size:14px;color:var(--muted)}
+.task .dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--line);margin-top:2px;display:grid;place-items:center;font-size:11px}
+.task.done{color:var(--muted)}
+.task.done .dot{background:var(--ok);border-color:var(--ok);color:var(--panel)}
+.task.done .txt{text-decoration:line-through;text-decoration-color:var(--line)}
+.task.cur{background:var(--soft);color:var(--ink);font-weight:700}
+.task.cur .dot{border-color:var(--accent);animation:pulse 1.6s infinite}
+@keyframes pulse{50%{box-shadow:0 0 0 4px color-mix(in srgb,var(--accent) 25%,transparent)}}
+.hintrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+.btn{border:1px solid var(--line);background:var(--panel);border-radius:8px;padding:5px 11px;font-size:13px;font-weight:700}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.chipcmd{font-family:var(--f-mono);font-size:12.5px;border:1px dashed var(--accent);color:var(--accent);background:transparent;border-radius:7px;padding:4px 9px;font-weight:600}
+.rule{border-left:4px solid var(--accent);background:var(--soft);padding:12px 14px;border-radius:0 10px 10px 0}
+.rule h3{font-size:14px;margin-bottom:4px}
+.rule p{margin:0}
+.small{font-size:13px;color:var(--muted)}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+/* graph */
+.graph-wrap{overflow-x:auto;padding:6px 8px 10px}
+#graph{display:block}
+#graph text{font-family:var(--f-mono)}
+.g-empty{padding:30px 16px;color:var(--muted);text-align:center;font-size:14px}
+.node.pop circle.main{animation:pop .45s ease-out}
+@keyframes pop{0%{r:2}70%{r:15}100%{r:11}}
+
+/* areas */
+.areas-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;padding:12px 16px 4px;font-size:12px;color:var(--muted);text-align:center}
+.areas-flow div{border-bottom:2px solid var(--line);padding-bottom:4px;font-weight:700;color:var(--ink)}
+.areas-flow small{display:block;font-weight:400;color:var(--muted);font-family:var(--f-mono);font-size:11px}
+.tbl-wrap{overflow-x:auto;padding:0 16px 14px}
+table{border-collapse:collapse;width:100%;font-size:13px;font-variant-numeric:tabular-nums}
+th{font-size:11px;text-transform:uppercase;letter-spacing:.07em;color:var(--muted);text-align:left;padding:8px 6px;border-bottom:1px solid var(--line)}
+td{padding:6px;border-bottom:1px solid var(--soft);font-family:var(--f-mono);font-size:12.5px;white-space:nowrap}
+td.f{font-weight:600}
+td .v{display:inline-block;padding:1px 7px;border-radius:5px;background:var(--soft)}
+td .v.chg{background:color-mix(in srgb,var(--warn) 22%,transparent);color:var(--ink);outline:1px solid var(--warn)}
+td .v.stg{background:color-mix(in srgb,var(--ok) 20%,transparent);outline:1px solid var(--ok)}
+.pill{font-family:var(--f-body);font-size:11px;font-weight:700;border-radius:999px;padding:2px 8px;border:1px solid currentColor}
+.pill.clean{color:var(--muted)} .pill.mod{color:var(--warn)} .pill.stg{color:var(--ok)} .pill.unt{color:var(--bad)} .pill.both{color:var(--l1)}
+.remote{display:flex;flex-wrap:wrap;gap:6px 16px;padding:0 16px 14px;font-size:13px;color:var(--muted)}
+.remote b{color:var(--ink);font-family:var(--f-mono);font-weight:600}
+
+/* terminal */
+.term{background:var(--term-bg);color:var(--term-ink);border-radius:14px;font-family:var(--f-mono);font-size:13px;overflow:hidden;min-width:0}
+.term-bar{display:flex;gap:6px;align-items:center;padding:9px 14px;border-bottom:1px solid #ffffff14;color:var(--term-dim);font-size:12px}
+.term-bar i{width:10px;height:10px;border-radius:50%;background:#ffffff26}
+.term-out{height:250px;overflow:auto;padding:10px 14px;white-space:pre-wrap;word-break:break-word}
+.term-out .cmd{color:var(--term-cmd)} .term-out .err{color:var(--term-err)} .term-out .ok{color:var(--term-ok)} .term-out .dim{color:var(--term-dim);font-style:italic}
+.term form{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid #ffffff14}
+.prompt{color:var(--term-ok);white-space:nowrap;flex:none}
+#cmd{flex:1;min-width:0;background:transparent;border:0;color:var(--term-ink);font:inherit;outline:none;caret-color:var(--term-cmd)}
+.term form:focus-within{box-shadow:inset 0 2px 0 var(--term-cmd)}
+
+/* drill */
+.drill{max-width:720px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:22px}
+.prog{height:8px;background:var(--soft);border-radius:999px;overflow:hidden}
+.prog span{display:block;height:100%;background:var(--ok);transition:width .3s}
+.situation{font-family:var(--f-display);font-size:24px;font-weight:700;line-height:1.25;margin:10px 0 16px}
+.dinput{display:flex;gap:8px;background:var(--term-bg);border-radius:10px;padding:12px 14px;align-items:center}
+.dinput span{color:var(--term-ok);font-family:var(--f-mono)}
+.dinput input{flex:1;min-width:0;background:transparent;border:0;color:var(--term-ink);font-family:var(--f-mono);font-size:15px;outline:none}
+.fb{margin-top:14px;padding:12px 14px;border-radius:10px;display:none}
+.fb.show{display:block}
+.fb.good{background:color-mix(in srgb,var(--ok) 14%,transparent);border:1px solid var(--ok)}
+.fb.badfb{background:color-mix(in srgb,var(--bad) 12%,transparent);border:1px solid var(--bad)}
+.fb h3{font-size:16px;margin-bottom:4px}
+.fb p{margin:4px 0 0}
+
+/* cheat */
+.cheat{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,330px),1fr));gap:14px}
+.cheat .card{padding:18px}
+.cheat h2{font-size:18px;margin-bottom:10px}
+.cheat table td{white-space:normal;font-family:var(--f-body);font-size:13.5px}
+.cheat table td:first-child{font-family:var(--f-mono);font-size:12.5px;white-space:nowrap;color:var(--accent);font-weight:600}
+.ideas{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,240px),1fr));gap:14px;margin-bottom:14px}
+.ideas .card h3{font-size:17px;margin:4px 0 6px}
+.ideas .card p{margin:0;font-size:14px;color:var(--muted)}
+.ideas .num{font-family:var(--f-mono);color:var(--accent);font-size:12px;font-weight:600}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+</style>
+
+<div class="wrap">
+<header class="top">
+  <div class="brand">
+    <svg class="mark" viewBox="0 0 40 40" aria-hidden="true"><path d="M8 30 L20 30 L32 30 M20 30 C20 20 26 12 32 12" fill="none" stroke="var(--muted)" stroke-width="2.5"/><circle cx="8" cy="30" r="5" fill="var(--l1)"/><circle cx="20" cy="30" r="5" fill="var(--l1)"/><circle cx="32" cy="30" r="5" fill="var(--l1)"/><circle cx="32" cy="12" r="5" fill="var(--accent)"/></svg>
+    <div><h1>Git Muscle Memory</h1><p>Type real commands. Watch the repo change. Then prove you remember.</p></div>
+  </div>
+  <nav class="tabs" role="tablist">
+    <button class="tab" role="tab" data-view="lessons" aria-selected="true">Lessons</button>
+    <button class="tab" role="tab" data-view="sandbox" aria-selected="false">Sandbox</button>
+    <button class="tab" role="tab" data-view="drill" aria-selected="false">Recall drill</button>
+    <button class="tab" role="tab" data-view="cheat" aria-selected="false">Cheat sheet</button>
+  </nav>
+</header>
+
+<main>
+<section id="view-lab" class="lab">
+  <aside class="guide" id="guide"></aside>
+  <div class="stage">
+    <div class="panel">
+      <div class="panel-h"><h2>Commit graph</h2>
+        <div class="legend"><span><i style="background:var(--accent)"></i>HEAD = you are here</span><span><i style="background:transparent;border:1.5px dashed var(--muted)"></i>orphaned (only in reflog)</span></div>
+      </div>
+      <div class="graph-wrap" id="graphWrap"><svg id="graph" role="img" aria-label="Commit graph"></svg></div>
+    </div>
+    <div class="panel">
+      <div class="panel-h"><h2>Where your files live</h2><span class="small">#n = a version of the file's content</span></div>
+      <div class="areas-flow">
+        <div>Working dir<small>edit</small></div>
+        <div>Staging<small>git add →</small></div>
+        <div>HEAD commit<small>git commit →</small></div>
+        <div>origin<small>git push →</small></div>
+      </div>
+      <div class="tbl-wrap" id="areas"></div>
+      <div class="remote" id="remote"></div>
+    </div>
+    <div class="term">
+      <div class="term-bar"><i></i><i></i><i></i><span style="margin-left:6px">~/playground · type <b style="color:var(--term-cmd)">help</b> for commands</span></div>
+      <div class="term-out" id="out" aria-live="polite"></div>
+      <form id="termForm"><label class="prompt" for="cmd" id="prompt">$</label><input id="cmd" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="git status"></form>
+    </div>
+  </div>
+</section>
+
+<section id="view-drill" hidden>
+  <div class="drill">
+    <div class="card">
+      <div class="row" style="justify-content:space-between"><span class="eyebrow">Recall drill · type the command from memory</span><span class="small" id="dCount"></span></div>
+      <div class="prog" style="margin-top:10px"><span id="dProg" style="width:0"></span></div>
+      <div class="situation" id="dQ"></div>
+      <form id="dForm" class="dinput"><span>$</span><input id="dIn" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="your answer"></form>
+      <div class="fb" id="dFb"></div>
+      <div class="row" style="margin-top:14px;justify-content:space-between">
+        <button class="btn" id="dSkip" type="button">I don't know, show me</button>
+        <button class="btn primary" id="dNext" type="button" hidden>Next</button>
+      </div>
+    </div>
+    <p class="small" style="text-align:center">Missed answers come back a few cards later. That repetition is what moves them into long-term memory. Run this drill again tomorrow and in three days.</p>
+  </div>
+</section>
+
+<section id="view-cheat" hidden>
+  <div class="ideas">
+    <div class="card"><span class="num">IDEA 1</span><h3>A commit is a photo</h3><p>A full snapshot of the project plus a pointer to its parent. History is a chain of photos.</p></div>
+    <div class="card"><span class="num">IDEA 2</span><h3>A branch is a sticky note</h3><p>A label pointing at one commit. It slides forward when you commit. HEAD = "you are here".</p></div>
+    <div class="card"><span class="num">IDEA 3</span><h3>Three places for files</h3><p>Working dir → staging (the cart) → repo (the album). Plus origin, the album on the server.</p></div>
+    <div class="card"><span class="num">IDEA 4</span><h3>Every command does one of two things</h3><p>It moves changes between those places, or it moves a sticky note around the graph.</p></div>
+  </div>
+  <div class="cheat">
+    <div class="card"><h2>Moving changes</h2><table>
+      <tr><td>git status</td><td>Where is everything? Run it constantly.</td></tr>
+      <tr><td>git add f / .</td><td>Working dir → staging</td></tr>
+      <tr><td>git commit -m ""</td><td>Staging → new commit</td></tr>
+      <tr><td>git commit -am ""</td><td>Stage tracked files and commit</td></tr>
+      <tr><td>git diff</td><td>Working dir vs staging</td></tr>
+      <tr><td>git diff --staged</td><td>Staging vs last commit</td></tr>
+    </table></div>
+    <div class="card"><h2>Moving sticky notes</h2><table>
+      <tr><td>git switch -c x</td><td>Create branch x here and move onto it</td></tr>
+      <tr><td>git switch x</td><td>Move HEAD to branch x</td></tr>
+      <tr><td>git merge x</td><td>Join x's history into your branch</td></tr>
+      <tr><td>git rebase main</td><td>Replay your commits on top of main</td></tr>
+      <tr><td>git branch -d x</td><td>Remove the label (commits stay)</td></tr>
+      <tr><td>git log --oneline --graph --all</td><td>Draw the whole graph</td></tr>
+    </table></div>
+    <div class="card"><h2>Undo ladder</h2><table>
+      <tr><td>git restore --staged f</td><td>Unstage, keep the edit</td></tr>
+      <tr><td>git restore f</td><td>Discard the edit (careful)</td></tr>
+      <tr><td>git reset --soft HEAD~1</td><td>Undo commit, keep changes staged</td></tr>
+      <tr><td>git reset HEAD~1</td><td>Undo commit, keep changes unstaged</td></tr>
+      <tr><td>git reset --hard HEAD~1</td><td>Undo commit and wipe changes</td></tr>
+      <tr><td>git revert &lt;hash&gt;</td><td>New commit that cancels an old one. Safe after push.</td></tr>
+      <tr><td>git commit --amend</td><td>Redo the last commit</td></tr>
+      <tr><td>git reflog</td><td>Every place HEAD has been. Your safety net.</td></tr>
+    </table></div>
+    <div class="card"><h2>Teamwork</h2><table>
+      <tr><td>git push -u origin x</td><td>Upload and remember the upstream</td></tr>
+      <tr><td>git fetch</td><td>Download only. Changes nothing of yours.</td></tr>
+      <tr><td>git pull</td><td>fetch + merge</td></tr>
+      <tr><td>git pull --rebase</td><td>fetch + rebase (straight history)</td></tr>
+      <tr><td>git stash / pop</td><td>Park unfinished work, bring it back</td></tr>
+    </table>
+    <div class="rule" style="margin-top:12px"><h3>Two rules</h3><p>Never rebase or reset commits other people already pulled. A rejected push means: pull first.</p></div></div>
+  </div>
+</section>
+</main>
+</div>
+
+<script>
+(function(){
+const $=s=>document.querySelector(s);
+const esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+let S, MODE='lessons', LESSON=0, TASK=0, LAST={line:'',ok:false}, PREV_IDS=new Set(), HIST=[], HPOS=0, HINT_OPEN=false;
+let PROG={done:[],drill:[]};
+try{const raw=localStorage.getItem('gmm-progress'); if(raw) PROG=Object.assign(PROG,JSON.parse(raw));}catch(e){}
+const save=()=>{try{localStorage.setItem('gmm-progress',JSON.stringify(PROG));}catch(e){}};
+
+/* ---------------- repository model ---------------- */
+function fresh(){return {inited:false,commits:{},seq:0,branches:{},order:[],head:null,work:{},index:{},stash:[],reflog:[],origin:{branches:{},commits:{}},tracking:{},ver:0};}
+class GitErr extends Error{}
+const fail=m=>{throw new GitErr(m)};
+const short=id=>id?id.slice(0,7):'';
+const keys=(...o)=>[...new Set(o.flatMap(x=>Object.keys(x||{})))].sort();
+const eqTree=(a,b)=>keys(a,b).every(k=>a[k]===b[k]);
+function newId(){let id;do{id=Array.from({length:7},()=>'0123456789abcdef'[Math.random()*16|0]).join('')}while(S.commits[id]||S.origin.commits[id]);return id}
+function mk(parents,msg,tree,store){const c={id:newId(),parents,msg,tree:{...tree},seq:++S.seq};(store||S.commits)[c.id]=c;return c}
+const headId=()=>!S.head?null:(S.head.b!==undefined?(S.branches[S.head.b]||null):S.head.d);
+const headTree=()=>{const h=headId();return h?S.commits[h].tree:{}};
+function ancestors(id,store){store=store||S.commits;const seen=new Set(),st=id?[id]:[];while(st.length){const c=st.pop();if(seen.has(c)||!store[c])continue;seen.add(c);st.push(...store[c].parents)}return seen}
+const isAnc=(a,b)=>!!a&&!!b&&ancestors(b).has(a);
+function mergeBase(a,b){const A=ancestors(a);let best=null;for(const c of ancestors(b))if(A.has(c)&&(!best||S.commits[c].seq>S.commits[best].seq))best=c;return best}
+function untracked(){const o={};for(const f in S.work)if(!(f in S.index))o[f]=S.work[f];return o}
+function dirty(){return !eqTree(S.index,headTree())||Object.keys(S.index).some(f=>S.work[f]!==S.index[f])}
+function needClean(){if(dirty())fail("error: You have uncommitted changes.\nhint: commit them or run git stash first.")}
+function log(why){S.reflog.push({id:headId(),why})}
+function setHead(id,why){if(S.head.b!==undefined)S.branches[S.head.b]=id;else S.head.d=id;log(why)}
+function syncWork(){const u=untracked();const t=headTree();S.index={...t};S.work={...t,...u}}
+function addBranch(n,id){S.branches[n]=id;if(!S.order.includes(n))S.order.push(n)}
+function delBranch(n){delete S.branches[n];S.order=S.order.filter(x=>x!==n)}
+function curName(){return S.head&&S.head.b!==undefined?S.head.b:null}
+function resolve(ref){
+  if(!ref)fail('fatal: needed a revision');
+  const m=ref.match(/^(.*?)((?:[~^]\d*)*)$/);let base=m[1]||'HEAD';if(base==='@')base='HEAD';
+  let id=null;
+  if(base==='HEAD')id=headId();
+  else if(S.branches[base])id=S.branches[base];
+  else if(S.tracking[base])id=S.tracking[base];
+  else if(/^[0-9a-f]{4,}$/.test(base)){const hits=Object.keys(S.commits).filter(k=>k.startsWith(base));if(hits.length===1)id=hits[0]}
+  if(!id)fail(`fatal: ambiguous argument '${ref}': unknown revision`);
+  for(const op of m[2].match(/[~^]\d*/g)||[]){
+    const n=op.length>1?parseInt(op.slice(1),10):1;
+    if(op[0]==='~'){for(let i=0;i<n;i++){id=S.commits[id].parents[0];if(!id)fail(`fatal: ${ref}: no such commit (went past the first commit)`)}}
+    else{id=S.commits[id].parents[n-1];if(!id)fail(`fatal: ${ref}: no such parent`)}
+  }
+  return id;
+}
+function aheadBehind(l,r){const A=ancestors(l),B=ancestors(r);let a=0,b=0;A.forEach(x=>{if(!B.has(x))a++});B.forEach(x=>{if(!A.has(x))b++});return [a,b]}
+function decor(id){
+  const d=[];const cn=curName();
+  if(S.head&&S.head.d===id)d.push('HEAD');
+  if(cn&&S.branches[cn]===id)d.push('HEAD -> '+cn);
+  S.order.forEach(b=>{if(b!==cn&&S.branches[b]===id)d.push(b)});
+  for(const t in S.tracking)if(S.tracking[t]===id)d.push(t);
+  return d;
+}
+const plural=(n,w)=>`${n} ${w}${n===1?'':'s'}`;
+
+/* ---------------- commands ---------------- */
+function tokenize(line){const out=[];line.replace(/"([^"]*)"|'([^']*)'|(\S+)/g,(m,a,b,c)=>{out.push(a!==undefined?a:b!==undefined?b:c)});return out}
+function exec(line,quiet){
+  const out=[];const p=(t,c)=>out.push([t,c||'']);let ok=true;
+  try{dispatch(tokenize(line),p,line)}catch(e){if(e instanceof GitErr){p(e.message,'err');ok=false}else{p('simulator error: '+e.message,'err');ok=false;console.error(e)}}
+  return {ok,out};
+}
+function dispatch(a,p,line){
+  const c=a[0];if(!c)return;
+  switch(c){
+    case 'help':return help(p);
+    case 'clear':$('#out').innerHTML='';return;
+    case 'edit':case 'touch':case 'vim':case 'nano':case 'code':{
+      if(a.length<2)fail('usage: edit <file>');
+      a.slice(1).forEach(f=>{const isNew=!(f in S.work);S.work[f]=++S.ver;p(`✎ ${f} ${isNew?'created':'changed'} (content #${S.ver})`,'dim')});return}
+    case 'rm':{if(a.length<2)fail('usage: rm <file>');a.slice(1).forEach(f=>{if(!(f in S.work))fail(`rm: ${f}: No such file`);delete S.work[f]});return}
+    case 'ls':{const f=Object.keys(S.work).sort();p(f.length?f.join('   '):'(empty folder)');return}
+    case 'cat':{const f=a[1];if(!(f in S.work))fail(`cat: ${f}: No such file`);p(`<content #${S.work[f]} of ${f}>`,'dim');return}
+    case 'sim':return sim(a.slice(1),p);
+    case 'git':return git(a.slice(1),p);
+    default:fail(`command not found: ${c}. Type help to see what works here.`);
+  }
+}
+function help(p){
+  p('Simulator helpers (stand-ins for writing code):','ok');
+  p('  edit <file>      create or change a file      rm <file>   delete a file');
+  p('  ls               list files                   clear       clear terminal');
+  p('  sim teammate     a teammate pushes a commit to origin/main');
+  p('Git commands:','ok');
+  p('  init status add commit log branch switch checkout merge rebase');
+  p('  reset revert restore stash reflog diff show push fetch pull remote');
+  p('Tip: chain commands with &&   ·   ↑ / ↓ for history','dim');
+}
+function sim(a,p){
+  if(a[0]!=='teammate')fail('usage: sim teammate');
+  const R=S.origin.branches.main;if(!R)fail('origin has no main yet. Push first: git push -u origin main');
+  const t={...S.origin.commits[R].tree};t['README.md']=++S.ver;
+  const c=mk([R],'Teammate: update README',t,S.origin.commits);S.origin.branches.main=c.id;
+  p(`👤 Your teammate pushed ${short(c.id)} "Teammate: update README" to origin/main.`,'ok');
+  p('You don\'t have it yet. Your local graph won\'t show it until you fetch or pull.','dim');
+}
+function git(a,p){
+  const sub=a[0],r=a.slice(1);
+  if(!sub||sub==='help'){help(p);return}
+  if(sub!=='init'&&!S.inited)fail('fatal: not a git repository (or any of the parent directories): .git\nhint: run git init first');
+  const map={init:gInit,status:gStatus,add:gAdd,commit:gCommit,log:gLog,branch:gBranch,switch:gSwitch,checkout:gCheckout,merge:gMerge,rebase:gRebase,reset:gReset,revert:gRevert,restore:gRestore,stash:gStash,reflog:gReflog,diff:gDiff,show:gShow,push:gPush,fetch:gFetch,pull:gPull,remote:gRemote};
+  if(!map[sub])fail(`git: '${sub}' is not a git command in this simulator. See 'help'.`);
+  return map[sub](r,p);
+}
+function gInit(a,p){if(S.inited){p('Reinitialized existing Git repository in ~/playground/.git/');return}S.inited=true;S.head={b:'main'};p('Initialized empty Git repository in ~/playground/.git/');p('A hidden .git folder now holds your photo album. Nothing is in it yet.','dim')}
+function gStatus(a,p){
+  const ht=headTree(),cn=curName();
+  p(cn!==null?`On branch ${cn}`:`HEAD detached at ${short(S.head.d)}`);
+  if(cn&&S.tracking['origin/'+cn]&&S.branches[cn]){const[x,y]=aheadBehind(S.branches[cn],S.tracking['origin/'+cn]);
+    if(!x&&!y)p(`Your branch is up to date with 'origin/${cn}'.`);else if(x&&!y)p(`Your branch is ahead of 'origin/${cn}' by ${plural(x,'commit')}.`);else if(!x)p(`Your branch is behind 'origin/${cn}' by ${plural(y,'commit')}.`);else p(`Your branch and 'origin/${cn}' have diverged (${x} and ${y} different commits).`)}
+  if(!headId())p('\nNo commits yet');
+  const st=[],un=[],ut=[];
+  keys(S.index,ht).forEach(f=>{if(S.index[f]!==ht[f])st.push(`${ht[f]===undefined?'new file:':S.index[f]===undefined?'deleted: ':'modified:'}   ${f}`)});
+  Object.keys(S.index).forEach(f=>{if(S.work[f]!==S.index[f])un.push(`${S.work[f]===undefined?'deleted: ':'modified:'}   ${f}`)});
+  Object.keys(S.work).forEach(f=>{if(!(f in S.index))ut.push(f)});
+  if(st.length){p('\nChanges to be committed:');st.forEach(x=>p('\t'+x,'ok'))}
+  if(un.length){p('\nChanges not staged for commit:');un.forEach(x=>p('\t'+x,'err'))}
+  if(ut.length){p('\nUntracked files:');ut.forEach(x=>p('\t'+x,'err'))}
+  if(!st.length&&!un.length&&!ut.length)p(headId()?'nothing to commit, working tree clean':'nothing to commit (create a file with edit, then git add)');
+}
+function gAdd(a,p){
+  if(!a.length)fail('Nothing specified, nothing added.\nhint: maybe you wanted to say git add .');
+  const all=a.some(x=>x==='.'||x==='-A'||x==='--all');
+  const files=all?keys(S.work,S.index):a.filter(x=>!x.startsWith('-'));
+  files.forEach(f=>{if(!(f in S.work)&&!(f in S.index))fail(`fatal: pathspec '${f}' did not match any files`)});
+  const moved=[];
+  files.forEach(f=>{if(f in S.work){if(S.index[f]!==S.work[f])moved.push(f);S.index[f]=S.work[f]}else if(f in S.index){delete S.index[f];moved.push(f)}});
+  if(moved.length)p(`→ staged: ${moved.join(', ')}`,'dim');
+}
+function gCommit(a,p){
+  let msg=null,all=false,amend=false;
+  for(let i=0;i<a.length;i++){const t=a[i];
+    if(t==='-m'||t==='--message'||t==='-am'||t==='-ma'){if(t==='-am'||t==='-ma')all=true;const rest=[];while(i+1<a.length&&!a[i+1].startsWith('-'))rest.push(a[++i]);msg=rest.join(' ')}
+    else if(t==='-a'||t==='--all')all=true;else if(t==='--amend')amend=true;else if(t==='--no-edit'){}
+    else fail(`error: unknown option '${t}'`)}
+  if(all)Object.keys(S.index).forEach(f=>{if(f in S.work)S.index[f]=S.work[f];else delete S.index[f]});
+  const hid=headId(),cn=curName(),lab=cn!==null?cn:'detached HEAD';
+  if(amend){if(!hid)fail('fatal: You have nothing to amend.');const old=S.commits[hid];
+    const c=mk(old.parents,msg||old.msg,S.index);setHead(c.id,'commit (amend): '+c.msg);
+    p(`[${lab} ${short(c.id)}] ${c.msg}`);p(`The old commit ${short(old.id)} was replaced, not edited. It's the faded dot now.`,'dim');return}
+  if(msg===null)fail('error: add a message: git commit -m "what you did"');
+  if(!msg.trim())fail('Aborting commit due to empty commit message.');
+  if(eqTree(S.index,headTree())){
+    const pend=Object.keys(S.work).some(f=>S.work[f]!==S.index[f]);
+    fail(pend?'no changes added to commit (use "git add" first, or git commit -am)':'nothing to commit, working tree clean')}
+  const ht=headTree();const n=keys(S.index,ht).filter(f=>S.index[f]!==ht[f]).length;
+  const c=mk(hid?[hid]:[],msg,S.index);setHead(c.id,'commit: '+msg);
+  p(`[${lab}${hid?'':' (root-commit)'} ${short(c.id)}] ${msg}`,'ok');p(` ${plural(n,'file')} changed`);
+}
+function gLog(a,p){
+  const allF=a.includes('--all'),one=a.includes('--oneline');
+  if(!headId()&&!allF)fail(`fatal: your current branch '${curName()}' does not have any commits yet`);
+  let ids=new Set();
+  if(allF){[headId(),...Object.values(S.branches),...Object.values(S.tracking)].forEach(t=>ancestors(t).forEach(x=>ids.add(x)))}else ids=ancestors(headId());
+  const list=[...ids].map(i=>S.commits[i]).sort((x,y)=>y.seq-x.seq);
+  const g=a.includes('--graph')?'* ':'';
+  list.forEach(c=>{const d=decor(c.id);const ds=d.length?` (${d.join(', ')})`:'';
+    if(one)p(`${g}${short(c.id)}${ds} ${c.msg}`);else{p(`${g}commit ${c.id}${ds}`,'ok');p(`    ${c.msg}\n`)}});
+  if(g)p('The graph panel above is the full picture of this.','dim');
+}
+function gBranch(a,p){
+  const fl=a.filter(x=>x.startsWith('-')),args=a.filter(x=>!x.startsWith('-'));
+  if(fl.some(f=>f==='-d'||f==='-D'||f==='--delete')){
+    const force=fl.includes('-D');const n=args[0];if(!n)fail('fatal: branch name required');
+    if(!S.branches[n])fail(`error: branch '${n}' not found.`);
+    if(n===curName())fail(`error: Cannot delete branch '${n}' checked out. Switch away first.`);
+    if(!force&&!isAnc(S.branches[n],headId()))fail(`error: The branch '${n}' is not fully merged.\nhint: If you are sure, run 'git branch -D ${n}'.`);
+    const id=S.branches[n];delBranch(n);p(`Deleted branch ${n} (was ${short(id)}).`);p('Only the sticky note was removed. The commits are still there.','dim');return}
+  if(fl.some(f=>f==='-m'||f==='-M')){const[o,nn]=args.length===2?args:[curName(),args[0]];if(!S.branches[o]&&o!==curName())fail(`error: no branch named '${o}'`);
+    S.branches[nn]=S.branches[o];S.order=S.order.map(x=>x===o?nn:x);delete S.branches[o];if(curName()===o)S.head={b:nn};p(`Renamed ${o} → ${nn}`,'dim');return}
+  if(!args.length){const cn=curName();if(!S.order.length&&cn!==null){p(`(no branches yet. ${cn} appears after the first commit)`,'dim');return}
+    S.order.forEach(b=>p(`${b===cn?'* ':'  '}${b}`,b===cn?'ok':''));if(fl.some(f=>f==='-a'||f==='-r'))Object.keys(S.tracking).forEach(t=>p('  remotes/'+t,'err'));return}
+  const n=args[0];if(S.branches[n])fail(`fatal: a branch named '${n}' already exists`);
+  if(!headId())fail(`fatal: not a valid object name: '${curName()}'. Make a first commit.`);
+  const at=args[1]?resolve(args[1]):headId();addBranch(n,at);
+  p(`New sticky note '${n}' at ${short(at)}. You are still on ${curName()||'detached HEAD'}.`,'dim');
+}
+function switchTo(target,p){
+  const cur=curName();
+  if(target.b!==undefined&&target.b===cur){p(`Already on '${cur}'`);return}
+  needClean();
+  const from=cur!==null?cur:short(headId());const u=untracked();
+  S.head=target;const t=headTree();S.index={...t};S.work={...t,...u};
+  log(`checkout: moving from ${from} to ${target.b!==undefined?target.b:short(target.d)}`);
+  if(target.b!==undefined)p(`Switched to branch '${target.b}'`);
+  else{p(`HEAD is now at ${short(target.d)} ${S.commits[target.d].msg}`);p('You are in "detached HEAD": HEAD points at a commit, not a branch. Commits made here get lost unless you create a branch (git switch -c name).','dim')}
+}
+function gSwitch(a,p){
+  if(a[0]==='-c'||a[0]==='--create'||a[0]==='-C'){const n=a[1];if(!n)fail('fatal: missing branch name');if(S.branches[n]&&a[0]!=='-C')fail(`fatal: a branch named '${n}' already exists`);
+    if(!headId()){if(dirty())fail('commit first');S.head={b:n};p(`Switched to a new branch '${n}'`);return}
+    needClean();const at=a[2]?resolve(a[2]):headId();addBranch(n,at);const from=curName();S.head={b:n};syncWork();log(`checkout: moving from ${from} to ${n}`);p(`Switched to a new branch '${n}'`);return}
+  if(a[0]==='--detach'||a[0]==='-d'){return switchTo({d:resolve(a[1]||'HEAD')},p)}
+  if(a[0]==='-'){const prev=[...S.reflog].reverse().find(r=>/^checkout: moving from (\S+) to/.test(r.why));if(!prev)fail('fatal: no previous branch');const m=prev.why.match(/from (\S+) to/);return gSwitch([m[1]],p)}
+  const n=a[0];if(!n)fail('fatal: missing branch or commit argument');
+  if(S.branches[n])return switchTo({b:n},p);
+  if(S.tracking['origin/'+n]){addBranch(n,S.tracking['origin/'+n]);switchTo({b:n},p);p(`branch '${n}' set up to track 'origin/${n}'.`);return}
+  let id=null;try{id=resolve(n)}catch(e){}
+  if(id)fail(`fatal: a branch is expected, got commit '${n}'\nhint: use git switch --detach ${n} (or git checkout ${n})`);
+  fail(`fatal: invalid reference: ${n}`);
+}
+function gCheckout(a,p){
+  if(a[0]==='-b'||a[0]==='-B')return gSwitch(['-c',...a.slice(1)],p);
+  if(a[0]==='--'){return gRestore(a.slice(1),p)}
+  const n=a[0];if(!n)fail('usage: git checkout <branch>');
+  if(S.branches[n]||S.tracking['origin/'+n])return gSwitch([n],p);
+  if((n in S.index)||(n in S.work))return gRestore([n],p);
+  return switchTo({d:resolve(n)},p);
+}
+function merge3(b,o,t,conf){const r={};keys(b,o,t).forEach(f=>{let v;if(o[f]===t[f])v=o[f];else if(o[f]===b[f])v=t[f];else if(t[f]===b[f])v=o[f];else{v=++S.ver;conf.push(f)}if(v!==undefined)r[f]=v});return r}
+function gMerge(a,p){
+  const noff=a.includes('--no-ff');const name=a.find(x=>!x.startsWith('-'));if(!name)fail('usage: git merge <branch>');
+  needClean();const ours=headId(),theirs=resolve(name);if(!ours)fail('fatal: make a first commit before merging');
+  if(isAnc(theirs,ours)){p('Already up to date.');return}
+  if(isAnc(ours,theirs)&&!noff){setHead(theirs,`merge ${name}: Fast-forward`);syncWork();p(`Updating ${short(ours)}..${short(theirs)}`);p('Fast-forward','ok');
+    p(`No new commit was needed. ${curName()||'HEAD'} just slid forward to ${short(theirs)}.`,'dim');return}
+  const base=mergeBase(ours,theirs),conf=[];
+  const tree=merge3(base?S.commits[base].tree:{},S.commits[ours].tree,S.commits[theirs].tree,conf);
+  conf.forEach(f=>p(`CONFLICT (content): Merge conflict in ${f}`,'err'));
+  if(conf.length)p('In real Git you would open the file, keep the right lines, then git add + git commit. The simulator combined both sides for you.','dim');
+  const c=mk([ours,theirs],`Merge branch '${name}'${curName()?` into ${curName()}`:''}`,tree);setHead(c.id,`merge ${name}: Merge made by the 'ort' strategy.`);syncWork();
+  p("Merge made by the 'ort' strategy.",'ok');p(`New merge commit ${short(c.id)} has two parents: ${short(ours)} and ${short(theirs)}.`,'dim');
+}
+function gRebase(a,p){
+  const name=a.find(x=>!x.startsWith('-'));if(!name)fail('usage: git rebase <branch>');
+  const cn=curName();if(cn===null)fail('fatal: rebase needs you to be on a branch');
+  needClean();const cur=headId(),onto=resolve(name);
+  if(isAnc(onto,cur)){p('Current branch '+cn+' is up to date.');return}
+  if(isAnc(cur,onto)){setHead(onto,`rebase (finish): refs/heads/${cn} onto ${short(onto)}`);syncWork();p(`Successfully rebased and updated refs/heads/${cn}. (fast-forward)`,'ok');return}
+  const base=mergeBase(cur,onto);const list=[];let x=cur;while(x&&x!==base){list.push(S.commits[x]);x=S.commits[x].parents[0]}list.reverse();
+  let tip=onto,tree={...S.commits[onto].tree};const pairs=[];
+  list.forEach(c=>{const pt=c.parents[0]?S.commits[c.parents[0]].tree:{};keys(pt,c.tree).forEach(f=>{if(pt[f]!==c.tree[f]){if(c.tree[f]===undefined)delete tree[f];else tree[f]=c.tree[f]}});
+    const nc=mk([tip],c.msg,tree);pairs.push(`${short(c.id)} → ${short(nc.id)}  ${c.msg}`);tip=nc.id});
+  S.branches[cn]=tip;log(`rebase (finish): returning to refs/heads/${cn}`);syncWork();
+  p(`Successfully rebased and updated refs/heads/${cn}.`,'ok');p(`Replayed ${plural(list.length,'commit')} on top of ${name}. Same changes, new hashes:`,'dim');pairs.forEach(s=>p('  '+s,'dim'));
+  p('The faded dots are the old versions. Nothing points to them anymore.','dim');
+}
+function gReset(a,p){
+  let mode='mixed',target=null;const files=[];
+  a.forEach(t=>{if(t==='--soft'||t==='--mixed'||t==='--hard')mode=t.slice(2);else if(t==='--')return;else{let ok=false;try{resolve(t);ok=true}catch(e){}
+    if(ok&&!target&&!(t in S.index&&!S.branches[t]))target=t;else if(t in S.index||t in headTree()||t in S.work)files.push(t);else fail(`fatal: ambiguous argument '${t}': unknown revision or path`)}});
+  if(files.length){const ht=headTree();files.forEach(f=>{if(f in ht)S.index[f]=ht[f];else delete S.index[f]});p('Unstaged changes after reset:');files.forEach(f=>p('M\t'+f));return}
+  if(!headId())fail('fatal: no commits yet');
+  const id=resolve(target||'HEAD');const u=untracked();
+  setHead(id,`reset: moving to ${target||'HEAD'}`);const t=S.commits[id].tree;
+  if(mode!=='soft')S.index={...t};if(mode==='hard')S.work={...t,...u};
+  if(mode==='hard'){p(`HEAD is now at ${short(id)} ${S.commits[id].msg}`);p('--hard: branch moved, staging AND working files reset. Uncommitted edits are gone.','dim')}
+  else if(mode==='soft')p(`--soft: ${curName()||'HEAD'} moved to ${short(id)}. Your changes are still staged, ready to re-commit.`,'dim');
+  else{const ch=Object.keys(S.work).filter(f=>S.work[f]!==S.index[f]&&f in S.index);if(ch.length){p('Unstaged changes after reset:');ch.forEach(f=>p('M\t'+f))}p(`--mixed: ${curName()||'HEAD'} moved to ${short(id)}. Changes kept in your files, unstaged.`,'dim')}
+}
+function gRevert(a,p){
+  const ref=a.find(x=>!x.startsWith('-'));if(!ref)fail('usage: git revert <commit>');needClean();
+  const id=resolve(ref),c=S.commits[id];if(c.parents.length>1)fail('error: reverting a merge commit needs -m (not covered in this simulator)');
+  const pt=c.parents[0]?S.commits[c.parents[0]].tree:{};const tree={...headTree()};
+  keys(pt,c.tree).forEach(f=>{if(pt[f]!==c.tree[f]){if(pt[f]===undefined)delete tree[f];else tree[f]=pt[f]}});
+  const nc=mk([headId()],`Revert "${c.msg}"`,tree);setHead(nc.id,'revert: '+nc.msg);syncWork();
+  p(`[${curName()||'detached HEAD'} ${short(nc.id)}] ${nc.msg}`,'ok');p('History was not rewritten. A new commit undoes the old one, so it is safe on shared branches.','dim');
+}
+function gRestore(a,p){
+  const staged=a.includes('--staged')||a.includes('-S');let files=a.filter(x=>!x.startsWith('-'));
+  if(!files.length)fail('fatal: you must specify path(s) to restore');
+  if(files.includes('.'))files=keys(S.work,S.index);
+  const ht=headTree();
+  files.forEach(f=>{
+    if(staged){if(!(f in S.index)&&!(f in ht))fail(`error: pathspec '${f}' did not match any file(s) known to git`);if(f in ht)S.index[f]=ht[f];else delete S.index[f]}
+    else{if(!(f in S.index)){if(files.length===1)fail(`error: pathspec '${f}' did not match any file(s) known to git (it is untracked)`);return}S.work[f]=S.index[f]}});
+  p(staged?`→ unstaged: ${files.join(', ')} (your edits are still in the file)`:`↺ ${files.join(', ')} reset to the staged/committed version. Unsaved edits discarded.`,'dim');
+}
+function gStash(a,p){
+  const s=a[0]||'push';
+  if(s==='push'||s==='save'||s==='-m'){if(!dirty())fail('No local changes to save');const hid=headId();
+    S.stash.unshift({work:{...S.work},index:{...S.index},base:{...headTree()},on:curName()||short(hid),msg:hid?S.commits[hid].msg:''});
+    const u=untracked();const t=headTree();S.index={...t};S.work={...t,...u};
+    p(`Saved working directory and index state WIP on ${S.stash[0].on}: ${short(hid)} ${S.stash[0].msg}`);p('Your changes are parked. The working tree is clean now.','dim');return}
+  if(s==='list'){if(!S.stash.length)p('(stash is empty)','dim');S.stash.forEach((e,i)=>p(`stash@{${i}}: WIP on ${e.on}: ${e.msg}`));return}
+  if(s==='drop'){if(!S.stash.length)fail('No stash entries found.');S.stash.shift();p('Dropped stash@{0}');return}
+  if(s==='pop'||s==='apply'){if(!S.stash.length)fail('No stash entries found.');const e=S.stash[0];
+    keys(e.index,e.base).forEach(f=>{if(e.index[f]!==e.base[f]){if(e.index[f]===undefined)delete S.index[f];else S.index[f]=e.index[f]}});
+    keys(e.work,e.base).forEach(f=>{if(e.work[f]!==e.base[f]){if(e.work[f]===undefined)delete S.work[f];else S.work[f]=e.work[f]}});
+    if(s==='pop'){S.stash.shift();p('Dropped stash@{0}. Your parked changes are back.','ok')}else p('Applied stash@{0} (kept it in the list).','ok');return}
+  fail(`usage: git stash [push|pop|apply|list|drop]`);
+}
+function gReflog(a,p){if(!S.reflog.length){p('(empty)','dim');return}
+  [...S.reflog].reverse().forEach((r,i)=>p(`${short(r.id)} HEAD@{${i}}: ${r.why}`,i===0?'ok':''));
+  p('Every move HEAD made is here, even commits no branch points to. Copy a hash and git reset --hard <hash> to go back.','dim')}
+function gDiff(a,p){const st=a.includes('--staged')||a.includes('--cached');const A=st?headTree():S.index,B=st?S.index:S.work;
+  const fs=keys(A,B).filter(f=>B[f]!==A[f]&&(st||f in S.index));if(!fs.length){p(st?'(nothing staged)':'(no unstaged changes)','dim');return}
+  fs.forEach(f=>{p(`diff --git a/${f} b/${f}`,'ok');p(`- ${A[f]!==undefined?'#'+A[f]:'(none)'}`,'err');p(`+ ${B[f]!==undefined?'#'+B[f]:'(deleted)'}`,'ok')})}
+function gShow(a,p){const id=resolve(a[0]||'HEAD'),c=S.commits[id];p(`commit ${c.id}`,'ok');if(c.parents.length>1)p(`Merge: ${c.parents.map(short).join(' ')}`);p(`    ${c.msg}\n`);
+  const pt=c.parents[0]?S.commits[c.parents[0]].tree:{};keys(pt,c.tree).forEach(f=>{if(pt[f]!==c.tree[f])p(`  ${pt[f]===undefined?'A':c.tree[f]===undefined?'D':'M'}  ${f}`)})}
+function gRemote(a,p){p('origin\tgit@github.com:you/playground.git (fetch)');p('origin\tgit@github.com:you/playground.git (push)')}
+function gPush(a,p){
+  const force=a.includes('-f')||a.includes('--force')||a.includes('--force-with-lease');
+  const args=a.filter(x=>!x.startsWith('-'));if(args[0]&&args[0]!=='origin')fail(`fatal: '${args[0]}' does not appear to be a git repository`);
+  const b=args[1]||curName();if(!b)fail('fatal: You are not currently on a branch.');
+  const L=S.branches[b];if(!L)fail(`error: src refspec ${b} does not match any (make a commit first)`);
+  if(!args[1]&&!S.tracking['origin/'+b]&&!a.includes('-u')&&!a.includes('--set-upstream')&&!S.origin.branches[b])fail(`fatal: The current branch ${b} has no upstream branch.\nhint: git push -u origin ${b}`);
+  const R=S.origin.branches[b];
+  if(R===L){p('Everything up-to-date');return}
+  if(R&&!force){
+    if(!S.commits[R]){p('To github.com:you/playground.git');fail(` ! [rejected]        ${b} -> ${b} (fetch first)\nerror: the remote has work you don't have yet.\nhint: run git pull, then push again.`)}
+    if(!isAnc(R,L)){p('To github.com:you/playground.git');fail(` ! [rejected]        ${b} -> ${b} (non-fast-forward)\nhint: your branch and origin/${b} diverged. git pull, then push.`)}
+  }
+  ancestors(L).forEach(id=>{S.origin.commits[id]=S.commits[id]});S.origin.branches[b]=L;S.tracking['origin/'+b]=L;
+  p('To github.com:you/playground.git');p(R?`   ${short(R)}..${short(L)}  ${b} -> ${b}${force?' (forced update)':''}`:` * [new branch]      ${b} -> ${b}`,'ok');
+  if(!R)p(`branch '${b}' set up to track 'origin/${b}'.`);
+}
+function gFetch(a,p){let n=0;for(const id in S.origin.commits)if(!S.commits[id]){S.commits[id]=S.origin.commits[id];n++}
+  const upd=[];for(const b in S.origin.branches){if(S.tracking['origin/'+b]!==S.origin.branches[b]){upd.push(`   ${short(S.tracking['origin/'+b])||'*'}..${short(S.origin.branches[b])}  ${b} -> origin/${b}`);S.tracking['origin/'+b]=S.origin.branches[b]}}
+  if(upd.length){p('From github.com:you/playground');upd.forEach(u=>p(u,'ok'));p(`Downloaded ${plural(n,'commit')}. Your branches didn't move; only origin/* labels did.`,'dim')}else p('(already up to date with origin)','dim')}
+function gPull(a,p){const cn=curName();if(cn===null)fail('fatal: not on a branch');if(!S.origin.branches[cn])fail(`There is no tracking information for '${cn}'.\nhint: git push -u origin ${cn}`);
+  gFetch([],p);if(a.includes('--rebase')||a.includes('-r'))return gRebase(['origin/'+cn],p);return gMerge(['origin/'+cn],p)}
+
+/* ---------------- rendering ---------------- */
+function reachable(){const r=new Set();[headId(),...Object.values(S.branches),...Object.values(S.tracking)].forEach(t=>ancestors(t).forEach(x=>r.add(x)));return r}
+function renderGraph(){
+  const svg=$('#graph'),wrap=$('#graphWrap');
+  const ids=Object.keys(S.commits).sort((a,b)=>S.commits[a].seq-S.commits[b].seq);
+  if(!ids.length){svg.setAttribute('width',0);svg.setAttribute('height',0);svg.innerHTML='';
+    let e=wrap.querySelector('.g-empty');if(!e){e=document.createElement('div');e.className='g-empty';wrap.appendChild(e)}
+    e.textContent=S.inited?'Repository is empty. Your first commit will appear here as a dot.':'No repository yet. Type git init in the terminal below.';return}
+  const e=wrap.querySelector('.g-empty');if(e)e.remove();
+  const reach=reachable(),lane={};let nl=0;
+  const tips=[];const cn=curName();
+  if(S.branches.main)tips.push(S.branches.main);S.order.forEach(b=>tips.push(S.branches[b]));
+  Object.keys(S.tracking).forEach(t=>tips.push(S.tracking[t]));if(headId())tips.push(headId());
+  const walk=t=>{if(!t||lane[t]!==undefined)return;const L=nl++;let c=t;while(c&&lane[c]===undefined&&S.commits[c]){lane[c]=L;c=S.commits[c].parents[0]}};
+  tips.forEach(walk);[...ids].reverse().forEach(walk);
+  const tags={};ids.forEach(i=>tags[i]=[]);
+  if(S.head&&S.head.d)tags[S.head.d].push({t:'HEAD',k:'head'});
+  if(cn!==null&&S.branches[cn])tags[S.branches[cn]].push({t:'HEAD → '+cn,k:'head'});
+  S.order.forEach(b=>{if(b!==cn&&tags[S.branches[b]])tags[S.branches[b]].push({t:b,k:'br'})});
+  for(const t in S.tracking)if(tags[S.tracking[t]])tags[S.tracking[t]].push({t,k:'rm'});
+  const maxT=Array(nl).fill(0);ids.forEach(i=>{maxT[lane[i]]=Math.max(maxT[lane[i]],tags[i].length)});
+  const ly=[];let acc=8;for(let L=0;L<nl;L++){ly[L]=acc+maxT[L]*22+18;acc=ly[L]+48}
+  const DX=104,PX=60;const pos={};ids.forEach((i,k)=>pos[i]={x:PX+k*DX,y:ly[lane[i]]});
+  const W=PX*2+(ids.length-1)*DX,H=acc;
+  const col=i=>`var(--l${lane[i]%6})`;
+  let s='';
+  ids.forEach(i=>{const c=S.commits[i];c.parents.forEach((pa,k)=>{if(!pos[pa])return;const a=pos[pa],b=pos[i];const mx=(a.x+b.x)/2;
+    const dead=!reach.has(i);s+=`<path d="M${a.x} ${a.y} C${mx} ${a.y} ${mx} ${b.y} ${b.x} ${b.y}" fill="none" style="stroke:${k===0?col(i):col(pa)}" stroke-width="2.5" ${dead?'stroke-dasharray="4 4" opacity=".4"':''}/>`})});
+  const hid=headId();
+  ids.forEach(i=>{const c=S.commits[i],{x,y}=pos[i],dead=!reach.has(i),isNew=!PREV_IDS.has(i);
+    s+=`<g class="node${isNew?' pop':''}" opacity="${dead?.4:1}"><title>${esc(c.id+' '+c.msg)}</title>`;
+    if(i===hid)s+=`<circle cx="${x}" cy="${y}" r="17" fill="none" style="stroke:var(--accent)" stroke-width="2.5"/>`;
+    s+=`<circle class="main" cx="${x}" cy="${y}" r="11" style="fill:${dead?'var(--panel)':col(i)};stroke:${col(i)}" stroke-width="2.5" ${dead?'stroke-dasharray="3 3"':''}/>`;
+    if(c.parents.length>1)s+=`<circle cx="${x}" cy="${y}" r="4" style="fill:var(--panel)"/>`;
+    s+=`<text x="${x}" y="${y+30}" text-anchor="middle" font-size="11" style="fill:var(--ink)" font-weight="600">${short(i)}</text>`;
+    const m=c.msg.length>14?c.msg.slice(0,13)+'…':c.msg;
+    s+=`<text x="${x}" y="${y+43}" text-anchor="middle" font-size="10" style="fill:var(--muted)">${esc(m)}</text>`;
+    tags[i].forEach((t,k)=>{const w=t.t.length*6.7+14,ty=y-24-k*22;
+      const fill=t.k==='head'?'var(--accent)':t.k==='rm'?'var(--soft)':'var(--ink)',tc=t.k==='head'?'var(--accent-ink)':t.k==='rm'?'var(--muted)':'var(--panel)';
+      s+=`<rect x="${x-w/2}" y="${ty-15}" width="${w}" height="19" rx="5" style="fill:${fill}${t.k==='rm'?';stroke:var(--line)':''}"/><text x="${x}" y="${ty-1.5}" text-anchor="middle" font-size="11" font-weight="600" style="fill:${tc}">${esc(t.t)}</text>`});
+    s+='</g>'});
+  svg.setAttribute('viewBox',`0 0 ${W} ${H}`);svg.setAttribute('width',W);svg.setAttribute('height',H);svg.innerHTML=s;
+  PREV_IDS=new Set(ids);requestAnimationFrame(()=>{wrap.scrollLeft=wrap.scrollWidth});
+}
+function renderAreas(){
+  const ht=headTree(),fs=keys(S.work,S.index,ht);const box=$('#areas');
+  if(!S.inited){box.innerHTML='<p class="small">Run <code>git init</code> to start tracking files.</p>';$('#remote').innerHTML='';return}
+  if(!fs.length){box.innerHTML='<p class="small">No files yet. Try <code>edit app.py</code>.</p>'}
+  else{const om=S.origin.branches[curName()]?S.origin.commits[S.origin.branches[curName()]].tree:null;
+    let h='<table><thead><tr><th>File</th><th>Working dir</th><th>Staging</th><th>HEAD</th><th>origin</th><th>State</th></tr></thead><tbody>';
+    fs.forEach(f=>{const w=S.work[f],i=S.index[f],c=ht[f];const v=(x,cls)=>x===undefined?'<span class="small">—</span>':`<span class="v ${cls||''}">#${x}</span>`;
+      const unt=!(f in S.index)&&w!==undefined,mod=(f in S.index)&&w!==i,stg=i!==c&&!unt;
+      const st=unt?'<span class="pill unt">untracked</span>':mod&&stg?'<span class="pill both">staged + modified</span>':mod?'<span class="pill mod">modified</span>':stg?'<span class="pill stg">staged</span>':'<span class="pill clean">committed</span>';
+      h+=`<tr><td class="f">${esc(f)}</td><td>${v(w,mod||unt?'chg':'')}</td><td>${v(i,stg?'stg':'')}</td><td>${v(c)}</td><td>${om?v(om[f]):'<span class="small">—</span>'}</td><td>${st}</td></tr>`});
+    box.innerHTML=h+'</tbody></table>'}
+  const r=$('#remote');const ob=Object.keys(S.origin.branches);
+  let rh=ob.length?ob.map(b=>`origin/${esc(b)} on server: <b>${short(S.origin.branches[b])}</b>`).join(' · '):'No remote branches yet.';
+  const cn=curName();if(cn&&S.tracking['origin/'+cn]&&S.branches[cn]){const[x,y]=aheadBehind(S.branches[cn],S.tracking['origin/'+cn]);rh+=` · you are <b>${x}</b> ahead, <b>${y}</b> behind (as of last fetch)`}
+  if(S.stash.length)rh+=` · stash: <b>${S.stash.length}</b>`;
+  r.innerHTML=rh;
+}
+function prompt(){const cn=S.inited?(curName()!==null?curName():short(headId())):null;$('#prompt').textContent=`~/playground${cn?` (${cn})`:''} $`}
+function print(lines,cls){const o=$('#out');lines.forEach(([t,c])=>{const d=document.createElement('div');d.className=c||cls||'';d.textContent=t;o.appendChild(d)});o.scrollTop=o.scrollHeight}
+function renderAll(){renderGraph();renderAreas();prompt();renderGuide()}
+
+/* ---------------- lessons ---------------- */
+const ran=re=>LAST.ok&&re.test(LAST.line.trim());
+const reachN=()=>ancestors(headId()).size;
+const BASE=['git init','edit app.py','git add .','git commit -m "Initial commit"','edit app.py','git commit -am "Add login view"'];
+const DIVERGED=[...BASE,'git switch -c feature','edit api.py','git add .','git commit -m "Add API endpoint"','edit api.py','git commit -am "Validate serials"','git switch main','edit README.md','git add .','git commit -m "Write README"'];
+function orphan(){const r=reachable();return Object.values(S.commits).filter(c=>!r.has(c.id)).sort((a,b)=>b.seq-a.seq)[0]}
+const LESSONS=[
+ {title:'Commits are photos',idea:'A commit is a <b>full snapshot</b> of your project plus a pointer to the commit before it. You choose what goes in the photo by staging it first.',
+  setup:[],rule:'Edit → <code>git add</code> (put it in the cart) → <code>git commit</code> (take the photo). Each photo points to its parent.',
+  tasks:[
+   {t:'Create a repository',h:'git init',c:()=>S.inited},
+   {t:'Write some code: create app.py',h:'edit app.py',c:()=>'app.py' in S.work},
+   {t:'Ask Git what it sees (red = not staged)',h:'git status',c:()=>ran(/^git status/)},
+   {t:'Put app.py in the cart (staging)',h:'git add app.py',c:()=>S.index['app.py']!==undefined},
+   {t:'Take the photo',h:'git commit -m "Add app"',c:()=>Object.keys(S.commits).length>=1},
+   {t:'Change app.py again. Watch the table turn yellow',h:'edit app.py',c:()=>headId()&&S.work['app.py']!==headTree()['app.py']},
+   {t:'Stage and commit in one go (-a = all tracked files)',h:'git commit -am "Update app"',c:()=>reachN()>=2},
+   {t:'Read the album',h:'git log --oneline',c:()=>ran(/^git log/)}]},
+ {title:'Branches are sticky notes',idea:'A branch is <b>not a copy</b> of your code. It is a label on one commit that slides forward when you commit. <b>HEAD</b> is "you are here".',
+  setup:BASE,rule:'<code>git branch x</code> makes a label. <code>git switch x</code> moves HEAD to it and swaps your files to that snapshot.',
+  tasks:[
+   {t:'Stick a new note called feature on this commit',h:'git branch feature',c:()=>!!S.branches.feature},
+   {t:'Check: HEAD is still on main',h:'git status',c:()=>ran(/^git status/)},
+   {t:'Move HEAD onto feature',h:'git switch feature',c:()=>curName()==='feature'},
+   {t:'Create api.py on this branch',h:'edit api.py',c:()=>'api.py' in S.work},
+   {t:'Stage it',h:'git add api.py',c:()=>S.index['api.py']!==undefined},
+   {t:'Commit. Only the feature note moves',h:'git commit -m "Add API endpoint"',c:()=>S.branches.feature!==S.branches.main},
+   {t:'Go back to main',h:'git switch main',c:()=>curName()==='main'},
+   {t:'List files. api.py is gone (it lives on feature)',h:'ls',c:()=>ran(/^ls/)}]},
+ {title:'Merging',idea:'Merge brings another branch\'s work into yours. If your branch hasn\'t moved, Git just <b>slides the label forward</b>. If both moved, it makes a <b>merge commit with two parents</b>.',
+  setup:DIVERGED,rule:'Fast-forward = label slides, no new commit. Diverged = merge commit with two parents. Delete merged branches with <code>git branch -d</code>.',
+  tasks:[
+   {t:'main and feature both moved. Merge feature into main',h:'git merge feature',c:()=>headId()&&S.commits[headId()].parents.length===2},
+   {t:'Start a quick fix branch',h:'git switch -c hotfix',c:()=>curName()==='hotfix'},
+   {t:'Fix something and commit it',h:'edit app.py && git commit -am "Fix typo"',c:()=>S.branches.hotfix&&S.branches.hotfix!==S.branches.main},
+   {t:'Go back to main',h:'git switch main',c:()=>curName()==='main'},
+   {t:'Merge hotfix. Watch: no new commit, main just slides',h:'git merge hotfix',c:()=>S.branches.main===S.branches.hotfix},
+   {t:'Remove the hotfix note (the commit stays)',h:'git branch -d hotfix',c:()=>!S.branches.hotfix}]},
+ {title:'Rebasing',idea:'Rebase picks up your commits and <b>replays them on top</b> of another branch, as if you started later. Straight history, but the commits get <b>new hashes</b>.',
+  setup:DIVERGED,rule:'Rebase your own local work for a clean line. Never rebase commits other people already pulled.',
+  tasks:[
+   {t:'Move onto feature',h:'git switch feature',c:()=>curName()==='feature'},
+   {t:'Replay feature on top of main',h:'git rebase main',c:()=>isAnc(S.branches.main,S.branches.feature)},
+   {t:'Draw the graph in the terminal. Compare the hashes',h:'git log --oneline --graph --all',c:()=>ran(/^git log/)},
+   {t:'Back to main',h:'git switch main',c:()=>curName()==='main'},
+   {t:'Merge feature. It\'s a fast-forward now',h:'git merge feature',c:()=>S.branches.main===S.branches.feature}]},
+ {title:'The undo ladder',idea:'<b>restore</b> works on files. <b>reset</b> moves your branch backwards. And nothing committed is truly lost: <b>reflog</b> remembers everywhere HEAD has been.',
+  setup:[...BASE,'edit secrets.env','git add secrets.env'],rule:'restore = files. reset --soft keeps staged, --mixed keeps edits, --hard wipes. reflog finds anything.',
+  tasks:[
+   {t:'Oops, you staged secrets.env. Unstage it but keep the file',h:'git restore --staged secrets.env',c:()=>S.index['secrets.env']===undefined&&'secrets.env' in S.work},
+   {t:'Now delete it from the folder',h:'rm secrets.env',c:()=>!('secrets.env' in S.work)},
+   {t:'Edit app.py (a bad idea)',h:'edit app.py',c:()=>S.work['app.py']!==S.index['app.py']},
+   {t:'Throw that edit away',h:'git restore app.py',c:()=>S.work['app.py']===S.index['app.py']&&ran(/restore|checkout/)},
+   {t:'Undo the last commit, keep its changes staged',h:'git reset --soft HEAD~1',c:()=>reachN()===1&&!eqTree(S.index,headTree())},
+   {t:'Re-commit with a better message',h:'git commit -m "Add login view with validation"',c:()=>reachN()===2},
+   {t:'Destroy the last commit completely',h:'git reset --hard HEAD~1',c:()=>reachN()===1&&!dirty()},
+   {t:'Regret it? Look at the reflog',h:'git reflog',c:()=>ran(/^git reflog/)},
+   {t:'Bring it back with the hash from the reflog',h:()=>{const o=orphan();return `git reset --hard ${o?short(o.id):'<hash>'}`},c:()=>reachN()===2&&ran(/^git reset/)}]},
+ {title:'Remotes and teamwork',idea:'<b>origin</b> is a second copy of the album on a server. <b>push</b> uploads, <b>fetch</b> downloads, <b>pull</b> is fetch + merge. A rejected push means someone pushed first.',
+  setup:[...BASE,'git push -u origin main'],rule:'Rejected push? <code>git pull</code>, then <code>git push</code>. Fetch only moves origin/* labels; it never touches your branches.',
+  tasks:[
+   {t:'Make a commit',h:'edit app.py && git commit -am "Add search"',c:()=>S.branches.main!==S.origin.branches.main&&isAnc(S.origin.branches.main,S.branches.main)},
+   {t:'Upload it',h:'git push',c:()=>S.origin.branches.main===S.branches.main},
+   {t:'Simulate a teammate pushing to main',h:'sim teammate',c:()=>S.origin.branches.main&&!S.commits[S.origin.branches.main]},
+   {t:'Make your own commit meanwhile',h:'edit api.py && git add . && git commit -m "Add API"',c:()=>'api.py' in headTree()},
+   {t:'Try to push. It will be rejected',h:'git push',c:()=>!LAST.ok&&/^git push/.test(LAST.line.trim())},
+   {t:'Pull their work in',h:'git pull',c:()=>S.commits[S.origin.branches.main]&&isAnc(S.origin.branches.main,S.branches.main)},
+   {t:'Push again',h:'git push',c:()=>S.origin.branches.main===S.branches.main}]},
+ {title:'Safe undo and stash',idea:'After you push, don\'t rewrite history. <b>revert</b> adds a new commit that cancels an old one. <b>stash</b> parks unfinished work so you can deal with something urgent.',
+  setup:[...BASE,'edit app.py','git commit -am "Buggy change"','git push -u origin main'],rule:'Pushed already? <code>git revert</code>, never reset. Interrupted? <code>git stash</code>, then <code>git stash pop</code>.',
+  tasks:[
+   {t:'The last commit is buggy and already pushed. Undo it safely',h:'git revert HEAD',c:()=>headId()&&S.commits[headId()].msg.startsWith('Revert')},
+   {t:'Push the revert',h:'git push',c:()=>S.origin.branches.main===S.branches.main},
+   {t:'Start new work',h:'edit app.py',c:()=>dirty()},
+   {t:'Urgent bug! Park your work',h:'git stash',c:()=>S.stash.length>0&&!dirty()},
+   {t:'See what\'s parked',h:'git stash list',c:()=>ran(/^git stash list/)},
+   {t:'Bring your work back',h:'git stash pop',c:()=>!S.stash.length&&dirty()}]}
+];
+function loadLesson(i){
+  LESSON=i;TASK=0;HINT_OPEN=false;S=fresh();
+  LESSONS[i].setup.forEach(l=>l.split('&&').forEach(x=>exec(x.trim(),true)));
+  PREV_IDS=new Set(Object.keys(S.commits));
+  $('#out').innerHTML='';print([[`Lesson ${i+1}: ${LESSONS[i].title}`,'ok'],[i?'The repo is set up for you. Look at the graph, then follow the tasks.':'Follow the tasks on the left. Type each command yourself; that is what makes it stick.','dim']]);
+  renderAll();
+}
+function renderGuide(){
+  const g=$('#guide');
+  if(MODE==='sandbox'){
+    g.innerHTML=`<span class="eyebrow">Free play</span><h2 class="lesson-title">Sandbox</h2>
+    <p class="idea">No tasks. Break things on purpose and watch what happens. Try a hard reset and recover it with reflog, or create a conflict-free mess of branches and untangle it.</p>
+    <div><span class="eyebrow">Start from</span><div class="row" style="margin-top:6px">
+    <button class="btn" data-preset="empty">Empty folder</button><button class="btn" data-preset="diverged">Diverged branches</button><button class="btn" data-preset="remote">Repo with remote</button></div></div>
+    <div><span class="eyebrow">Ideas to try</span><div class="hintrow">${['git log --oneline --graph --all','git rebase main','git commit --amend -m "Better"','git switch --detach HEAD~1','git reset --hard HEAD~2','git reflog','git pull --rebase'].map(c=>`<button class="chipcmd" data-fill="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>`;
+    return}
+  const L=LESSONS[LESSON],done=TASK>=L.tasks.length;
+  let h=`<div class="lessons">${LESSONS.map((l,i)=>`<button class="lchip${PROG.done.includes(i)?' done':''}" data-lesson="${i}" aria-current="${i===LESSON}" title="${esc(l.title)}">${PROG.done.includes(i)?'✓ ':''}${i+1}</button>`).join('')}</div>
+  <div><span class="eyebrow">Lesson ${LESSON+1} of ${LESSONS.length}</span><h2 class="lesson-title">${L.title}</h2></div><p class="idea">${L.idea}</p><ol class="tasks">`;
+  L.tasks.forEach((t,i)=>{const st=i<TASK?'done':i===TASK?'cur':'';const hint=typeof t.h==='function'?t.h():t.h;
+    h+=`<li class="task ${st}"><span class="dot">${i<TASK?'✓':''}</span><div><span class="txt">${t.t}</span>${i===TASK?`<div class="hintrow">${HINT_OPEN?`<button class="chipcmd" data-fill="${esc(hint)}" title="Put it in the terminal">${esc(hint)}</button>`:'<button class="btn" data-hint>Show me the command</button>'}</div>`:''}</div></li>`});
+  h+='</ol>';
+  if(done)h+=`<div class="rule"><h3>Lock it in</h3><p>${L.rule}</p></div><div class="row">${LESSON<LESSONS.length-1?`<button class="btn primary" data-lesson="${LESSON+1}">Next lesson →</button>`:`<button class="btn primary" data-view-go="drill">Take the recall drill →</button>`}<button class="btn" data-lesson="${LESSON}">Redo</button></div>`;
+  else h+=`<div class="row" style="justify-content:space-between"><span class="small">Try it from memory before peeking.</span><button class="btn" data-lesson="${LESSON}">Restart lesson</button></div>`;
+  g.innerHTML=h;
+}
+function checkTask(){
+  if(MODE!=='lessons')return;const L=LESSONS[LESSON];if(TASK>=L.tasks.length)return;
+  let ok=false;try{ok=!!L.tasks[TASK].c()}catch(e){}
+  if(ok){TASK++;HINT_OPEN=false;if(TASK>=L.tasks.length&&!PROG.done.includes(LESSON)){PROG.done.push(LESSON);save()}}
+}
+function run(line){
+  print([[`${$('#prompt').textContent} ${line}`,'cmd']]);
+  for(const part of line.split('&&')){const l=part.trim();if(!l)continue;const r=exec(l);LAST={line:l,ok:r.ok};print(r.out);checkTask();if(!r.ok)break}
+  renderAll();
+}
+function preset(n){S=fresh();const m={empty:[],diverged:DIVERGED,remote:[...BASE,'git push -u origin main']}[n];m.forEach(l=>exec(l,true));PREV_IDS=new Set(Object.keys(S.commits));$('#out').innerHTML='';print([['Sandbox ready. Type help to see every command.','dim']]);renderAll()}
+
+/* ---------------- events ---------------- */
+$('#termForm').addEventListener('submit',e=>{e.preventDefault();const v=$('#cmd').value;if(!v.trim())return;HIST.push(v);HPOS=HIST.length;$('#cmd').value='';run(v)});
+$('#cmd').addEventListener('keydown',e=>{if(e.key==='ArrowUp'){if(HPOS>0){HPOS--;$('#cmd').value=HIST[HPOS]}e.preventDefault()}else if(e.key==='ArrowDown'){if(HPOS<HIST.length){HPOS++;$('#cmd').value=HIST[HPOS]||''}e.preventDefault()}});
+$('#guide').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.hint!==undefined){HINT_OPEN=true;renderGuide();return}
+  if(b.dataset.fill){$('#cmd').value=b.dataset.fill;$('#cmd').focus();return}
+  if(b.dataset.lesson!==undefined){loadLesson(+b.dataset.lesson);$('#cmd').focus();return}
+  if(b.dataset.preset){preset(b.dataset.preset);return}
+  if(b.dataset.viewGo){show(b.dataset.viewGo)}});
+function show(v){document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected',t.dataset.view===v));
+  $('#view-lab').hidden=!(v==='lessons'||v==='sandbox');$('#view-drill').hidden=v!=='drill';$('#view-cheat').hidden=v!=='cheat';
+  if(v==='lessons'&&MODE!=='lessons'){MODE='lessons';loadLesson(LESSON)}else if(v==='sandbox'&&MODE!=='sandbox'){MODE='sandbox';preset('diverged')}
+  if(v==='drill'){dStart();$('#dIn').focus()}}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>show(t.dataset.view)));
+
+/* ---------------- recall drill ---------------- */
+const DRILL=[
+ {id:'status',q:'See what changed and what is staged.',a:[/^git status$/],s:'git status',w:'Your most-used command. It answers "where is everything right now?"'},
+ {id:'addall',q:'Stage every change in the folder.',a:[/^git add (\.|-A|--all)$/],s:'git add .',w:'Moves all changes from the working dir into staging (the cart).'},
+ {id:'commit',q:'Commit what is staged with the message: Fix bug',a:[/^git commit -m ["']Fix bug["']$/],s:'git commit -m "Fix bug"',w:'Takes the photo of whatever is in the cart.'},
+ {id:'swc',q:'Create a branch called feature and move onto it, in one command.',a:[/^git (switch -c|checkout -b) feature$/],s:'git switch -c feature',w:'-c = create. The older spelling is git checkout -b feature.'},
+ {id:'unstage',q:'Unstage config.py but keep your edits in the file.',a:[/^git restore (--staged|-S) config\.py$/,/^git reset (HEAD )?config\.py$/],s:'git restore --staged config.py',w:'--staged touches only the cart. Your file is untouched.'},
+ {id:'discard',q:'Throw away your unstaged edits to app.py.',a:[/^git restore app\.py$/,/^git checkout (-- )?app\.py$/],s:'git restore app.py',w:'Overwrites the file with the staged/committed version. The edits are gone for good.'},
+ {id:'soft',q:'Undo the last commit but keep its changes staged.',a:[/^git reset --soft (HEAD~1?|HEAD\^|@~1?)$/],s:'git reset --soft HEAD~1',w:'--soft only moves the branch label back. Staging and files stay as they were.'},
+ {id:'hard',q:'Undo the last commit AND delete its changes completely.',a:[/^git reset --hard (HEAD~1?|HEAD\^|@~1?)$/],s:'git reset --hard HEAD~1',w:'--hard moves the label and resets staging and files. Recoverable only through reflog.'},
+ {id:'revert',q:'Commit abc1234 is already pushed. Undo it safely.',a:[/^git revert abc1234$/],s:'git revert abc1234',w:'Adds a new commit that cancels the old one. History stays intact for your teammates.'},
+ {id:'amend',q:'Fix the message of your last (unpushed) commit.',a:[/^git commit --amend( -m ["'].*["'])?$/],s:'git commit --amend -m "Better message"',w:'Replaces the last commit with a new one. Only do this before pushing.'},
+ {id:'reflog',q:'You did a bad reset --hard. Find the commit you "lost".',a:[/^git reflog( show)?$/],s:'git reflog',w:'Lists every place HEAD has been. Then git reset --hard <hash> to go back.'},
+ {id:'stash',q:'Park your unfinished work so you can switch branches.',a:[/^git stash( push)?( -m ["'].*["'])?$/],s:'git stash',w:'Saves your uncommitted changes aside and cleans the working tree.'},
+ {id:'pop',q:'Bring your parked work back (and remove it from the stash list).',a:[/^git stash pop$/],s:'git stash pop',w:'pop = apply + drop. Use apply to keep a copy in the list.'},
+ {id:'fetch',q:'Download what is new on the remote without touching your branches.',a:[/^git fetch( origin)?$/],s:'git fetch',w:'Only origin/* labels move. Look first, then merge or rebase.'},
+ {id:'rebase',q:'You are on feature. Put your commits on top of the latest main.',a:[/^git rebase (origin\/)?main$/],s:'git rebase main',w:'Replays your commits on the new base. New hashes, straight history.'},
+ {id:'graph',q:'Draw the whole commit graph, all branches, one line per commit.',a:[/^git log(?=.*--graph)(?=.*--all)(?=.*--oneline)( --(oneline|graph|all)){3}$/],s:'git log --oneline --graph --all',w:'The fastest way to see where every sticky note points.'},
+ {id:'merge',q:'Bring branch feature into the branch you are on.',a:[/^git merge feature$/],s:'git merge feature',w:'Fast-forward if possible, otherwise a merge commit with two parents.'},
+ {id:'pushu',q:'First push of main: upload it and remember origin as its upstream.',a:[/^git push (-u|--set-upstream) origin main$/],s:'git push -u origin main',w:'After -u, plain git push and git pull know where to go.'},
+ {id:'rejected',q:'git push was rejected: "fetch first". What do you run next?',a:[/^git pull( --rebase)?( origin main)?$/],s:'git pull',w:'Someone pushed before you. Bring their work in, then push again.'},
+ {id:'diffst',q:'Show exactly what is staged (what the next commit will contain).',a:[/^git diff (--staged|--cached)$/],s:'git diff --staged',w:'Plain git diff shows unstaged changes; --staged shows the cart.'}
+];
+let DQ=[],DCUR=null,DANS=false;
+function dStart(){if(DQ.length&&DCUR)return dRender();DQ=DRILL.filter(d=>!PROG.drill.includes(d.id)).sort(()=>Math.random()-.5);if(!DQ.length){PROG.drill=[];save();DQ=[...DRILL].sort(()=>Math.random()-.5)}dNextCard()}
+function dNextCard(){DCUR=DQ.shift()||null;DANS=false;$('#dIn').value='';$('#dFb').className='fb';$('#dNext').hidden=true;$('#dSkip').hidden=false;$('#dIn').disabled=false;dRender()}
+function dRender(){const n=PROG.drill.length;$('#dCount').textContent=`${n} of ${DRILL.length} mastered`;$('#dProg').style.width=(n/DRILL.length*100)+'%';
+  if(!DCUR){$('#dQ').textContent='All 20 mastered. Come back tomorrow and run it again; spacing it out is what makes it permanent.';$('#dForm').hidden=true;$('#dSkip').hidden=true;
+    $('#dNext').hidden=false;$('#dNext').textContent='Start over';return}
+  $('#dForm').hidden=false;$('#dNext').textContent='Next';$('#dQ').textContent=DCUR.q}
+function dAnswer(given){if(!DCUR||DANS)return;DANS=true;const v=given.trim().replace(/\s+/g,' ');const good=given!==null&&DCUR.a.some(r=>r.test(v));
+  const fb=$('#dFb');fb.className='fb show '+(good?'good':'badfb');
+  fb.innerHTML=`<h3>${good?'Correct':'Not quite'}</h3>${good?'':`<p>Answer: <code>${esc(DCUR.s)}</code></p>`}<p>${esc(DCUR.w)}</p>${good?'':'<p class="small">This one comes back in a few cards.</p>'}`;
+  if(good){if(!PROG.drill.includes(DCUR.id))PROG.drill.push(DCUR.id);save()}else DQ.splice(Math.min(3,DQ.length),0,DCUR);
+  $('#dIn').disabled=true;$('#dSkip').hidden=true;$('#dNext').hidden=false;$('#dNext').focus();dRender();$('#dQ').textContent=DCUR.q}
+$('#dForm').addEventListener('submit',e=>{e.preventDefault();if($('#dIn').value.trim())dAnswer($('#dIn').value)});
+$('#dSkip').addEventListener('click',()=>dAnswer(''));
+$('#dNext').addEventListener('click',()=>{if(!DCUR){PROG.drill=[];save();DQ=[];dStart()}else dNextCard();$('#dIn').focus()});
+
+/* ---------------- boot ---------------- */
+const first=LESSONS.findIndex((l,i)=>!PROG.done.includes(i));
+loadLesson(first<0?0:first);
+})();
+</script>
+
+</body></html>
